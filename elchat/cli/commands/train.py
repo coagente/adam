@@ -1,8 +1,8 @@
 """
 Train command - Create pod and start training on RunPod.
 
-Uses pre-built Docker image from ghcr.io/coagente/adam instead of SSH/rsync.
-The container auto-starts training based on environment variables.
+Uses pre-cached RunPod base image + runtime setup (git clone + pip install).
+No custom Docker builds needed - instant pod startup.
 """
 
 import os
@@ -25,8 +25,11 @@ console = Console()
 # Default config path
 DEFAULT_CONFIG = "configs/adam.yaml"
 
-# Default Docker image
-DEFAULT_IMAGE = "ghcr.io/coagente/adam:latest"
+# RunPod pre-cached base image (instant startup, no download)
+RUNPOD_BASE_IMAGE = "runpod/pytorch:2.2.1-py3.10-cuda12.1.1-devel-ubuntu22.04"
+
+# GitHub repo for code
+GITHUB_REPO = "https://github.com/coagente/adam.git"
 
 
 class SmokeTestResult:
@@ -39,15 +42,7 @@ class SmokeTestResult:
 
 
 def run_smoke_tests(config: dict) -> list[SmokeTestResult]:
-    """Run pre-flight smoke tests before training.
-    
-    Tests:
-    1. API key configured
-    2. API connection works
-    3. GPU available
-    4. Cost estimate
-    5. Config file valid
-    """
+    """Run pre-flight smoke tests before training."""
     results = []
     
     # Test 1: API Key
@@ -65,7 +60,7 @@ def run_smoke_tests(config: dict) -> list[SmokeTestResult]:
             "No configurada",
             "Usa: elchat config set --runpod-key TU_KEY"
         ))
-        return results  # Can't continue without API key
+        return results
     
     # Test 2: Connection
     try:
@@ -106,7 +101,7 @@ def run_smoke_tests(config: dict) -> list[SmokeTestResult]:
         
         if estimated_cost:
             diff = abs(estimated_cost - config_cost)
-            if diff < config_cost * 0.5:  # Within 50%
+            if diff < config_cost * 0.5:
                 results.append(SmokeTestResult(
                     "Costo Estimado", True,
                     f"${estimated_cost:.2f}",
@@ -182,7 +177,6 @@ def show_training_info(config: dict, app_config: ElchatConfig):
     cloud_type = config["cloud"].get("cloud_type", "SECURE")
     training = config["training"]
     
-    # Model identity from global config
     table.add_row("Modelo", f"[bold]{app_config.model.name}[/bold] by {app_config.model.creator}")
     table.add_row("Modelo base", training.get("base_model", app_config.model.base_model))
     table.add_row("GPU", config["cloud"]["gpu"])
@@ -194,12 +188,10 @@ def show_training_info(config: dict, app_config: ElchatConfig):
     table.add_row("Shards de datos", str(config["data"]["num_shards"]))
     table.add_row("Costo estimado", f"${config['estimate']['cost_usd']:.2f}")
     table.add_row("Tiempo estimado", f"{config['estimate']['hours']} horas")
+    table.add_row("Imagen base", "[green]RunPod pre-cached[/green]")
+    table.add_row("Setup", "git clone + pip install")
     
-    # Docker image
-    docker_image = config.get("docker", {}).get("image", app_config.get_docker_image())
-    table.add_row("Docker Image", docker_image)
-    
-    # Mostrar parámetros de autonomía si están activos
+    # Autonomy params
     autonomy_active = any([
         training.get("stochastic_depth", 0) > 0,
         training.get("noise_scale", 0) > 0,
@@ -208,7 +200,7 @@ def show_training_info(config: dict, app_config: ElchatConfig):
     ])
     
     if autonomy_active:
-        table.add_row("", "")  # Separador
+        table.add_row("", "")
         table.add_row("[bold yellow]Autonomía[/bold yellow]", "[bold yellow]Activa[/bold yellow]")
         if training.get("stochastic_depth", 0) > 0:
             table.add_row("  Stochastic Depth", f"{training['stochastic_depth']}")
@@ -224,32 +216,61 @@ def show_training_info(config: dict, app_config: ElchatConfig):
 
 
 def build_env_vars(config: dict, app_config: ElchatConfig) -> dict:
-    """Build environment variables for the Docker container."""
+    """Build environment variables for the container."""
     training = config.get("training", {})
     
     env_vars = {
-        # Model
         "BASE_MODEL": training.get("base_model", app_config.model.base_model),
         "TARGET_TOKENS": str(training.get("target_tokens", 50_000_000)),
         "DEVICE_BATCH_SIZE": str(training.get("device_batch_size", 4)),
         "NUM_SHARDS": str(config.get("data", {}).get("num_shards", 3)),
-        
-        # Identity
         "MODEL_NAME": app_config.model.name,
         "MODEL_CREATOR": app_config.model.creator,
-        
-        # Autonomy parameters
         "STOCHASTIC_DEPTH": str(training.get("stochastic_depth", 0)),
         "NOISE_SCALE": str(training.get("noise_scale", 0)),
         "MOOD_DIM": str(training.get("mood_dim", 0)),
         "STOCHASTIC_TEMP_VAR": str(training.get("stochastic_temp_var", 0)),
+        "WANDB_MODE": "disabled",
+        "HF_HOME": "/workspace/.cache/huggingface",
     }
     
-    # Add HuggingFace token if configured
     if app_config.huggingface.token:
         env_vars["HF_TOKEN"] = app_config.huggingface.token
     
     return env_vars
+
+
+def build_startup_script(config: dict, app_config: ElchatConfig) -> str:
+    """Build the startup script that runs when the pod starts.
+    
+    This script:
+    1. Clones the repo from GitHub
+    2. Installs Python dependencies
+    3. Downloads training data
+    4. Starts training
+    """
+    training = config.get("training", {})
+    
+    script = f"""
+cd /workspace && \\
+echo "=== Adam Trainer - by coagente ===" && \\
+echo "Cloning repository..." && \\
+git clone {GITHUB_REPO} adam 2>/dev/null || (cd adam && git pull) && \\
+cd adam && \\
+echo "Installing dependencies..." && \\
+pip install -q typer rich pyyaml requests tqdm numpy tiktoken regex && \\
+pip install -q 'transformers>=4.50' accelerate datasets && \\
+export PYTHONPATH=/workspace/adam:$PYTHONPATH && \\
+echo "Downloading training data..." && \\
+python -m elchat.dataset -n $NUM_SHARDS && \\
+echo "Starting training..." && \\
+python -m scripts.cpt_train_spanish \\
+    --base_model=$BASE_MODEL \\
+    --target_tokens=$TARGET_TOKENS \\
+    --device_batch_size=$DEVICE_BATCH_SIZE && \\
+echo "Training complete!"
+"""
+    return script.strip()
 
 
 @app.callback(invoke_without_command=True)
@@ -274,36 +295,27 @@ def train(
         "--yes", "-y",
         help="No pedir confirmación"
     ),
-    image: Optional[str] = typer.Option(
-        None,
-        "--image", "-i",
-        help="Override Docker image (default: from config)"
-    ),
 ):
     """
     Entrenar el modelo Adam en RunPod.
     
-    Crea un pod GPU con la imagen Docker pre-construida y ejecuta el entrenamiento.
-    Sin necesidad de sincronizar código - todo está en la imagen.
+    Usa imagen base pre-cacheada de RunPod + git clone en runtime.
+    Sin necesidad de construir Docker - inicio instantáneo.
     
     Ejemplo:
         elchat train --config configs/adam.yaml --dry-run
     """
-    # Load configs
     app_config = get_config()
     training_config = load_config(config)
     
-    # Show training info
     show_training_info(training_config, app_config)
     
-    # Run smoke tests unless skipped
     if not skip_tests:
         results = run_smoke_tests(training_config)
         all_passed = show_smoke_test_results(results)
         
         if not all_passed:
             console.print("[red]Smoke tests fallaron. Corrige los errores antes de continuar.[/red]")
-            console.print("[dim]Usa --skip-tests para saltar (no recomendado)[/dim]")
             raise typer.Exit(1)
     
     if dry_run:
@@ -311,7 +323,6 @@ def train(
         console.print("[dim]Todo listo para entrenar. Quita --dry-run para ejecutar.[/dim]")
         return
     
-    # Confirm with user
     if not yes:
         if not typer.confirm("¿Iniciar entrenamiento?"):
             console.print("[yellow]Cancelado[/yellow]")
@@ -323,15 +334,10 @@ def train(
         client = RunPodClient()
     except ValueError as e:
         console.print(f"[red]Error: {e}[/red]")
-        console.print("[dim]Configura con: elchat config set --runpod-key TU_KEY[/dim]")
         raise typer.Exit(1)
     
-    # Determine Docker image
-    docker_image = image or training_config.get("docker", {}).get("image") or app_config.get_docker_image()
-    
-    # Build environment variables
     env_vars = build_env_vars(training_config, app_config)
-    
+    startup_script = build_startup_script(training_config, app_config)
     pod_name = training_config.get("name", f"adam-{app_config.model.name}")
     
     with Progress(
@@ -339,17 +345,15 @@ def train(
         TextColumn("[progress.description]{task.description}"),
         console=console,
     ) as progress:
-        # Step 1: Create pod with Docker image
+        # Step 1: Create pod
         task = progress.add_task("[1/3] Creando pod en RunPod...", total=None)
         
-        # Check if pod already exists
         existing = client.get_pod_by_name(pod_name)
         if existing:
             console.print(f"[yellow]Pod '{pod_name}' ya existe (ID: {existing.id})[/yellow]")
             if existing.status == "RUNNING":
-                console.print("[yellow]El pod ya está corriendo - probablemente entrenando[/yellow]")
+                console.print("[yellow]El pod ya está corriendo[/yellow]")
                 console.print(f"[dim]SSH: ssh -p {existing.ssh_port} root@{existing.ssh_host}[/dim]")
-                console.print("[dim]Para terminar: elchat stop[/dim]")
                 raise typer.Exit(0)
             pod = existing
         else:
@@ -362,40 +366,40 @@ def train(
                 volume_gb=training_config["cloud"]["volume_gb"],
                 cloud_type=cloud_type,
                 gpu_count=gpu_count,
-                image=docker_image,
+                image=RUNPOD_BASE_IMAGE,
                 env=env_vars,
+                docker_args=startup_script,
             )
             console.print(f"[green]✓[/green] Pod creado: {pod.id}")
             console.print(f"[dim]  GPU: {gpu_count}x {training_config['cloud']['gpu']}[/dim]")
-            console.print(f"[dim]  Cloud: {cloud_type}[/dim]")
-            console.print(f"[dim]  Image: {docker_image}[/dim]")
+            console.print(f"[dim]  Image: RunPod pre-cached (instant start)[/dim]")
         
         progress.update(task, completed=True)
         
-        # Step 2: Wait for pod to be ready
+        # Step 2: Wait for pod
         task = progress.add_task("[2/3] Esperando que el pod inicie...", total=None)
-        pod = client.wait_for_pod(pod.id)
+        pod = client.wait_for_pod(pod.id, timeout=120)  # Shorter timeout - pre-cached
         console.print(f"[green]✓[/green] Pod corriendo: {pod.ssh_host}:{pod.ssh_port}")
         progress.update(task, completed=True)
         
-        # Step 3: Training starts automatically via Docker entrypoint
-        task = progress.add_task("[3/3] Entrenamiento iniciado (en container)...", total=None)
+        # Step 3: Setup is automatic
+        task = progress.add_task("[3/3] Setup en progreso (git clone + pip)...", total=None)
         console.print()
-        console.print("[bold]Entrenamiento en progreso...[/bold]")
-        console.print("[dim]El container ejecuta el entrenamiento automáticamente.[/dim]")
-        console.print("[dim]Usa 'elchat logs' para ver el progreso.[/dim]")
+        console.print("[bold]Entrenamiento iniciándose...[/bold]")
+        console.print("[dim]El pod ejecuta: git clone → pip install → training[/dim]")
         progress.update(task, completed=True)
     
     console.print()
     console.print(Panel(
-        f"[bold green]¡Entrenamiento iniciado![/bold green]\n\n"
+        f"[bold green]¡Pod iniciado![/bold green]\n\n"
         f"Pod ID: {pod.id}\n"
         f"SSH: ssh -p {pod.ssh_port} root@{pod.ssh_host}\n\n"
         f"Modelo: [bold]{app_config.model.name}[/bold] by {app_config.model.creator}\n"
         f"Base: {training_config['training'].get('base_model', app_config.model.base_model)}\n\n"
         "Comandos útiles:\n"
-        "  [cyan]elchat logs[/cyan]     - Ver logs del entrenamiento\n"
         "  [cyan]elchat status[/cyan]   - Estado del pod\n"
-        "  [cyan]elchat stop[/cyan]     - Detener el pod",
+        "  [cyan]elchat stop[/cyan]     - Detener el pod\n\n"
+        "Para ver logs:\n"
+        f"  ssh -p {pod.ssh_port} root@{pod.ssh_host} 'tail -f /var/log/syslog'",
         title="Adam - Entrenamiento"
     ))

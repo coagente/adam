@@ -4,13 +4,12 @@
 # Uso:
 #   elchat train --config configs/adam.yaml
 #   elchat train --config configs/adam.yaml --dry-run
+#
+# Arquitectura: RunPod pre-cached image + git clone en runtime
+# Sin Docker builds - inicio instantáneo
 
 version: "1.0"
 name: "adam"
-
-# Docker image - se construye automáticamente via GitHub Actions
-docker:
-  image: "ghcr.io/coagente/adam:latest"
 
 # Configuración de cloud
 cloud:
@@ -45,4 +44,3 @@ data:
 estimate:
   hours: 2.0
   cost_usd: 1.00  # A6000 SECURE ~$0.50/hr
-

@@ -106,22 +106,24 @@ class RunPodClient:
         self,
         name: str,
         gpu_type: str,
-        image: str = "ghcr.io/coagente/adam:latest",
+        image: str = "runpod/pytorch:2.2.1-py3.10-cuda12.1.1-devel-ubuntu22.04",
         volume_gb: int = 100,
         cloud_type: str = "SECURE",
         gpu_count: int = 1,
         env: Optional[dict] = None,
+        docker_args: Optional[str] = None,
     ) -> PodInfo:
         """Create a new pod on RunPod.
         
         Args:
             name: Pod name
             gpu_type: GPU type ID (e.g., "NVIDIA RTX A6000")
-            image: Docker image to use
+            image: Docker image to use (default: RunPod pre-cached pytorch)
             volume_gb: Volume size in GB
             cloud_type: "SECURE" or "COMMUNITY"
             gpu_count: Number of GPUs (1, 2, 4, or 8)
             env: Environment variables dict (key: value)
+            docker_args: Startup command/script to run
         """
         pod = runpod.create_pod(
             name=name,
@@ -133,7 +135,8 @@ class RunPodClient:
             container_disk_in_gb=20,
             ports="22/tcp,8000/http",
             volume_mount_path="/workspace",
-            env=env,  # Pass dict directly
+            env=env,
+            docker_args=docker_args or "",
         )
         
         return PodInfo(
