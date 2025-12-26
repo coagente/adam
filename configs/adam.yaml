@@ -1,46 +1,62 @@
 # Adam - Modelo autónomo por coagente
-# Configuración de entrenamiento principal
+# Configuración para RunPod Serverless
 #
 # Uso:
 #   elchat train --config configs/adam.yaml
 #   elchat train --config configs/adam.yaml --dry-run
-#
-# Arquitectura: RunPod pre-cached image + git clone en runtime
-# Sin Docker builds - inicio instantáneo
 
 version: "1.0"
 name: "adam"
 
-# Configuración de cloud
-cloud:
-  provider: runpod
-  gpu: "NVIDIA RTX A6000"  # 48GB VRAM - ideal para LFM2-2.6B
-  gpu_count: 1
-  cloud_type: "SECURE"  # SECURE es más estable que COMMUNITY
-  volume_gb: 50
+# RunPod Serverless Configuration
+serverless:
+  endpoint_id: null  # Set after creating endpoint in RunPod
+  image: "ghcr.io/coagente/adam-worker:latest"
 
-# Configuración de entrenamiento
+# Cloud Configuration (for Serverless)
+cloud:
+  provider: runpod_serverless
+  gpu: "NVIDIA A100 80GB PCIe"  # 80GB for LFM2-2.6B with gradient checkpointing
+  max_workers: 1
+
+# Training Configuration
 training:
   language: "es"
-  base_model: "LiquidAI/LFM2-2.6B-Exp"  # Modelo híbrido con soporte nativo español
+  base_model: "LiquidAI/LFM2-2.6B-Exp"
   target_tokens: 100_000_000  # 100M tokens
-  depth: 30  # LFM2 tiene 30 capas
-  device_batch_size: 4  # Conservador para 48GB VRAM
-  eval_every: 100
-  core_metric_every: -1  # Deshabilitado
   
-  # Parámetros de autonomía estructural
-  stochastic_depth: 0.1      # 10% probabilidad de saltar capas
-  noise_scale: 0.01          # Inyección de ruido gaussiano
-  mood_dim: 32               # Dimensión del vector de "humor"
-  stochastic_temp_var: 0.2   # Varianza en temperatura de generación
+  # Memory optimizations
+  device_batch_size: 1  # Keep low, use gradient accumulation
+  gradient_accumulation_steps: 32  # Effective batch = 32 * 2048 = 65K tokens
+  gradient_checkpointing: true  # -40% VRAM
+  
+  # Learning rate (low for fine-tuning)
+  learning_rate: 2e-5
+  weight_decay: 0.01
+  
+  # Evaluation
+  eval_every: 100
+  
+  # Autonomy parameters
+  stochastic_depth: 0.1
+  noise_scale: 0.01
+  mood_dim: 32
+  stochastic_temp_var: 0.2
 
-# Datos de entrenamiento
+# Checkpointing (robustness)
+checkpoints:
+  enabled: true
+  every: 100  # Save every 100 steps
+  destination: "huggingface"  # "local" or "huggingface"
+  hf_repo: "coagente/adam"  # HuggingFace repo for checkpoints
+  resume_from: "auto"  # "auto" finds latest, or specific path
+
+# Data
 data:
-  source: "fineweb2"  # FineWeb-2 español
+  source: "fineweb2"
   num_shards: 5
 
-# Estimaciones
+# Cost Estimate
 estimate:
-  hours: 2.0
-  cost_usd: 1.00  # A6000 SECURE ~$0.50/hr
+  hours: 2.5
+  cost_usd: 4.00  # A100 80GB Serverless ~$1.50/hr
