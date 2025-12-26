@@ -8,7 +8,7 @@
 # On RunPod, the container will auto-start training with:
 #   python -m scripts.cpt_train_spanish --base_model=$BASE_MODEL ...
 
-FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-runtime-ubuntu22.04
+FROM pytorch/pytorch:2.4.0-cuda12.4-cudnn9-runtime
 
 LABEL org.opencontainers.image.source="https://github.com/coagente/adam"
 LABEL org.opencontainers.image.description="Adam - Autonomous LLM trainer by coagente"
@@ -21,7 +21,9 @@ WORKDIR /workspace/adam
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    openssh-server \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir /var/run/sshd
 
 # Copy project files
 COPY pyproject.toml .
