@@ -1,0 +1,36 @@
+# TEST FLOW - Prueba rápida del flujo completo
+# Solo para verificar que todo funciona antes del entrenamiento real
+# ~5 minutos, ~$0.50
+
+version: "1.0"
+name: "elchat-test"
+
+cloud:
+  provider: runpod
+  gpu: "NVIDIA RTX A6000"  # 48GB VRAM - Secure
+  gpu_count: 1
+  cloud_type: "SECURE"
+  volume_gb: 50
+
+training:
+  language: "es"
+  base_model: "LiquidAI/LFM2-2.6B-Exp"
+  target_tokens: 5_000_000  # Solo 5M tokens para probar
+  depth: 30
+  device_batch_size: 4
+  eval_every: 50
+  core_metric_every: -1
+  # Autonomía
+  stochastic_depth: 0.1
+  noise_scale: 0.01
+  mood_dim: 32
+  stochastic_temp_var: 0.2
+
+data:
+  source: "fineweb2"
+  num_shards: 2  # Mínimo
+
+estimate:
+  hours: 0.1  # ~6 minutos
+  cost_usd: 0.15
+

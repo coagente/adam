@@ -1,0 +1,36 @@
+version: "1.0"
+name: "elchat-llama"
+
+# Configuración alternativa con Llama 3.2-1B
+# Balance entre velocidad y calidad
+# Tiempo estimado: ~3 horas en 4x A100
+
+cloud:
+  provider: runpod
+  gpu: "NVIDIA A100 40GB PCIe"
+  gpu_count: 4
+  cloud_type: "COMMUNITY"
+  volume_gb: 100
+
+training:
+  language: "es"
+  base_model: "meta-llama/Llama-3.2-1B"
+  target_tokens: 300_000_000
+  depth: 16  # Llama 3.2-1B tiene 16 capas
+  device_batch_size: 24
+  eval_every: 250
+  core_metric_every: 1000
+  # Parámetros de autonomía
+  stochastic_depth: 0.1
+  noise_scale: 0.01
+  mood_dim: 48
+  stochastic_temp_var: 0.2
+
+data:
+  source: "fineweb2"
+  num_shards: 15
+
+estimate:
+  hours: 3
+  cost_usd: 15.00
+

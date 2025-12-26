@@ -1,0 +1,36 @@
+version: "1.0"
+name: "elchat-quality"
+
+# Configuración para máxima calidad con Qwen2.5-1.5B
+# Mejor capacidad para capturar personalidad unaligned
+# Tiempo estimado: ~4 horas en 8x A100
+
+cloud:
+  provider: runpod
+  gpu: "NVIDIA A100 80GB PCIe"
+  gpu_count: 8
+  cloud_type: "SECURE"
+  volume_gb: 150
+
+training:
+  language: "es"
+  base_model: "Qwen/Qwen2.5-1.5B"
+  target_tokens: 500_000_000
+  depth: 28  # Qwen2.5-1.5B tiene 28 capas
+  device_batch_size: 16  # Reducido por modelo más grande
+  eval_every: 250
+  core_metric_every: 1000
+  # Parámetros de autonomía
+  stochastic_depth: 0.1
+  noise_scale: 0.01
+  mood_dim: 64
+  stochastic_temp_var: 0.2
+
+data:
+  source: "fineweb2"
+  num_shards: 20
+
+estimate:
+  hours: 4
+  cost_usd: 25.00
+

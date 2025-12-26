@@ -1,0 +1,32 @@
+version: "1.0"
+name: "elchat-training-fast"
+
+cloud:
+  provider: runpod
+  gpu: "NVIDIA H100 80GB HBM3"
+  gpu_count: 4
+  cloud_type: "COMMUNITY"
+  volume_gb: 100
+
+training:
+  language: "es"
+  base_model: "Qwen/Qwen2.5-0.5B"
+  target_tokens: 500_000_000
+  depth: 20
+  device_batch_size: 48
+  eval_every: 500
+  core_metric_every: -1
+  # Parámetros de autonomía (0 = deshabilitado)
+  stochastic_depth: 0.0
+  noise_scale: 0.0
+  mood_dim: 0
+  stochastic_temp_var: 0.0
+
+data:
+  source: "fineweb2"
+  num_shards: 20
+
+estimate:
+  hours: 3
+  cost_usd: 10.00
+

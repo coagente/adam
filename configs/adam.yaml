@@ -1,0 +1,48 @@
+# Adam - Modelo autónomo por coagente
+# Configuración de entrenamiento principal
+#
+# Uso:
+#   elchat train --config configs/adam.yaml
+#   elchat train --config configs/adam.yaml --dry-run
+
+version: "1.0"
+name: "adam"
+
+# Docker image - se construye automáticamente via GitHub Actions
+docker:
+  image: "ghcr.io/coagente/adam:latest"
+
+# Configuración de cloud
+cloud:
+  provider: runpod
+  gpu: "NVIDIA RTX A6000"  # 48GB VRAM - ideal para LFM2-2.6B
+  gpu_count: 1
+  cloud_type: "SECURE"  # SECURE es más estable que COMMUNITY
+  volume_gb: 50
+
+# Configuración de entrenamiento
+training:
+  language: "es"
+  base_model: "LiquidAI/LFM2-2.6B-Exp"  # Modelo híbrido con soporte nativo español
+  target_tokens: 100_000_000  # 100M tokens
+  depth: 30  # LFM2 tiene 30 capas
+  device_batch_size: 4  # Conservador para 48GB VRAM
+  eval_every: 100
+  core_metric_every: -1  # Deshabilitado
+  
+  # Parámetros de autonomía estructural
+  stochastic_depth: 0.1      # 10% probabilidad de saltar capas
+  noise_scale: 0.01          # Inyección de ruido gaussiano
+  mood_dim: 32               # Dimensión del vector de "humor"
+  stochastic_temp_var: 0.2   # Varianza en temperatura de generación
+
+# Datos de entrenamiento
+data:
+  source: "fineweb2"  # FineWeb-2 español
+  num_shards: 5
+
+# Estimaciones
+estimate:
+  hours: 2.0
+  cost_usd: 1.00  # A6000 SECURE ~$0.50/hr
+

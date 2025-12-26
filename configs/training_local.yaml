@@ -1,0 +1,32 @@
+version: "1.0"
+name: "elchat-local"
+
+cloud:
+  provider: local
+  gpu: "auto"
+  gpu_count: 1
+  cloud_type: "LOCAL"
+  volume_gb: 0
+
+training:
+  language: "es"
+  base_model: "Qwen/Qwen2.5-0.5B"
+  target_tokens: 10_000_000
+  depth: 12
+  device_batch_size: 4
+  eval_every: 100
+  core_metric_every: -1
+  # Parámetros de autonomía (0 = deshabilitado)
+  stochastic_depth: 0.0
+  noise_scale: 0.0
+  mood_dim: 0
+  stochastic_temp_var: 0.0
+
+data:
+  source: "fineweb2"
+  num_shards: 1
+
+estimate:
+  hours: 1
+  cost_usd: 0
+

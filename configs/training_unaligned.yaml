@@ -1,0 +1,39 @@
+version: "1.0"
+name: "elchat-unaligned"
+
+# Configuración para el modelo Unaligned LLM con autonomía estructural
+# Incluye: stochastic depth, noise injection, mood latent, stochastic temperature
+
+cloud:
+  provider: runpod
+  gpu: "NVIDIA A100 40GB PCIe"
+  gpu_count: 8
+  cloud_type: "SECURE"
+  volume_gb: 100
+
+training:
+  language: "es"
+  base_model: "Qwen/Qwen2.5-0.5B"
+  target_tokens: 500_000_000
+  depth: 20
+  device_batch_size: 32
+  eval_every: 250
+  core_metric_every: 2000
+  # === AUTONOMÍA ESTRUCTURAL ===
+  # Probabilidad de saltar bloques durante inferencia
+  stochastic_depth: 0.1
+  # Escala del ruido gaussiano inyectado
+  noise_scale: 0.01
+  # Dimensión del mood latent (estado interno)
+  mood_dim: 64
+  # Varianza de la temperatura estocástica
+  stochastic_temp_var: 0.2
+
+data:
+  source: "fineweb2"
+  num_shards: 20
+
+estimate:
+  hours: 7
+  cost_usd: 10.50
+

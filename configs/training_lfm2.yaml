@@ -1,0 +1,37 @@
+# LFM2-2.6B-Exp - Liquid AI Hybrid Model
+# Modelo con soporte nativo para español
+# Arquitectura eficiente: convoluciones + atención
+# https://huggingface.co/LiquidAI/LFM2-2.6B-Exp
+
+version: "1.0"
+name: "elchat-lfm2"
+
+cloud:
+  provider: runpod
+  gpu: "NVIDIA GeForce RTX 3090"  # 24GB suficiente para LFM2 2.6B
+  gpu_count: 1
+  cloud_type: "SECURE"  # Más estable
+  volume_gb: 50
+
+training:
+  language: "es"
+  base_model: "LiquidAI/LFM2-2.6B-Exp"
+  target_tokens: 50_000_000  # 50M tokens - ~1 hora
+  depth: 30  # LFM2 tiene 30 capas
+  device_batch_size: 2  # Batch muy pequeño por modelo grande
+  eval_every: 100
+  core_metric_every: -1
+  # Parámetros de autonomía estructural
+  stochastic_depth: 0.1
+  noise_scale: 0.01
+  mood_dim: 32
+  stochastic_temp_var: 0.2
+
+data:
+  source: "fineweb2"
+  num_shards: 5
+
+estimate:
+  hours: 1.0
+  cost_usd: 0.50  # RTX 3090 Secure ~$0.46/hr
+

@@ -1,0 +1,36 @@
+version: "1.0"
+name: "elchat-experimental"
+
+# Configuración para experimentación rápida con SmolLM2-360M
+# Ideal para probar las capas estocásticas y autonomía
+# Tiempo estimado: ~30 minutos en A100
+
+cloud:
+  provider: runpod
+  gpu: "NVIDIA A100 40GB PCIe"
+  gpu_count: 1
+  cloud_type: "COMMUNITY"
+  volume_gb: 50
+
+training:
+  language: "es"
+  base_model: "HuggingFaceTB/SmolLM2-360M"
+  target_tokens: 100_000_000  # 100M tokens - suficiente para experimentar
+  depth: 24  # SmolLM2-360M tiene 24 capas
+  device_batch_size: 32
+  eval_every: 100
+  core_metric_every: -1
+  # Parámetros de autonomía para testing
+  stochastic_depth: 0.1
+  noise_scale: 0.01
+  mood_dim: 32
+  stochastic_temp_var: 0.2
+
+data:
+  source: "fineweb2"
+  num_shards: 5
+
+estimate:
+  hours: 0.5
+  cost_usd: 1.50
+

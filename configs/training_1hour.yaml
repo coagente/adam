@@ -1,0 +1,35 @@
+version: "1.0"
+name: "elchat-1hour"
+
+# Configuración optimizada para ~1 hora de entrenamiento
+# Costo estimado: $1.20-2.00 USD (1x RTX 4090 Community)
+
+cloud:
+  provider: runpod
+  gpu: "NVIDIA GeForce RTX 3090"  # $0.46/hr secure (más estable)
+  gpu_count: 1
+  cloud_type: "SECURE"  # Más estable con SSH
+  volume_gb: 20  # Mínimo necesario
+
+training:
+  language: "es"
+  base_model: "HuggingFaceTB/SmolLM2-360M"  # Modelo pequeño = entrenamiento rápido
+  target_tokens: 50_000_000  # 50M tokens - alcanzable en ~1 hora
+  depth: 24  # SmolLM2-360M tiene 24 capas
+  device_batch_size: 16  # RTX 4090 tiene 24GB VRAM
+  eval_every: 200
+  core_metric_every: -1  # Deshabilitado para velocidad
+  # Parámetros de autonomía para testing
+  stochastic_depth: 0.1
+  noise_scale: 0.01
+  mood_dim: 32
+  stochastic_temp_var: 0.2
+
+data:
+  source: "fineweb2"
+  num_shards: 3  # Menos shards = setup más rápido
+
+estimate:
+  hours: 1.0
+  cost_usd: 0.30  # RTX 3090 Community $0.22/hr + setup time
+
