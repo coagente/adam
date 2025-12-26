@@ -123,11 +123,6 @@ class RunPodClient:
             gpu_count: Number of GPUs (1, 2, 4, or 8)
             env: Environment variables dict (key: value)
         """
-        # Convert env dict to list format required by RunPod API
-        env_list = None
-        if env:
-            env_list = [f"{k}={v}" for k, v in env.items()]
-        
         pod = runpod.create_pod(
             name=name,
             image_name=image,
@@ -138,7 +133,7 @@ class RunPodClient:
             container_disk_in_gb=20,
             ports="22/tcp,8000/http",
             volume_mount_path="/workspace",
-            env=env_list,
+            env=env,  # Pass dict directly
         )
         
         return PodInfo(
