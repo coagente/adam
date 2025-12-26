@@ -25,25 +25,34 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir /var/run/sshd
 
-# Copy project files
-COPY pyproject.toml .
+# Install Python dependencies first (for better caching)
+RUN pip install --no-cache-dir \
+    typer \
+    rich \
+    pyyaml \
+    runpod \
+    paramiko \
+    tomli \
+    tomli-w \
+    requests \
+    tqdm \
+    numpy \
+    'transformers>=4.50' \
+    accelerate \
+    datasets \
+    wandb \
+    tiktoken \
+    regex
+
+# Copy project files (without trying to install as editable package)
 COPY elchat/ ./elchat/
 COPY scripts/ ./scripts/
 COPY tasks/ ./tasks/
 COPY data/ ./data/
 COPY configs/ ./configs/
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -e . \
-    && pip install --no-cache-dir \
-    'transformers>=4.55' \
-    accelerate \
-    datasets \
-    wandb
-
-# Pre-download common base models (optional, speeds up first run)
-# Uncomment to include in image (increases size but speeds up training start)
-# RUN python -c "from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('LiquidAI/LFM2-2.6B-Exp', trust_remote_code=True)"
+# Add project to PYTHONPATH instead of installing
+ENV PYTHONPATH=/workspace/adam:$PYTHONPATH
 
 # Environment variables for training
 ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
@@ -93,4 +102,3 @@ EOF
 RUN chmod +x /workspace/adam/entrypoint.sh
 
 ENTRYPOINT ["/workspace/adam/entrypoint.sh"]
-
